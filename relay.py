@@ -7,7 +7,9 @@ Connects to Chromium's remote debugging port and exposes simple HTTP endpoints.
 import asyncio
 import base64
 import json
+import os
 import secrets
+import stat
 import sys
 from pathlib import Path
 from urllib.parse import urljoin
@@ -355,6 +357,9 @@ if __name__ == "__main__":
     print(f"  Listening: http://{RELAY_HOST}:{RELAY_PORT}")
     print(f"  CDP target: {CDP_HOST}:{CDP_PORT}")
     print(f"  Auth token: {AUTH_TOKEN}")
-    Path("/tmp/browser-relay-token").write_text(AUTH_TOKEN)
+    token_path = Path("/tmp/browser-relay-token")
+    token_path.touch(mode=0o600, exist_ok=True)
+    token_path.write_text(AUTH_TOKEN)
+    os.chmod(token_path, stat.S_IRUSR | stat.S_IWUSR)  # 0600 - owner only
     print(f"{'='*50}\n")
     web.run_app(create_app(), host=RELAY_HOST, port=RELAY_PORT, print=None)

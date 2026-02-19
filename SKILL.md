@@ -24,8 +24,10 @@ AI → HTTP (port 18792) → relay.py → CDP (port 9222) → 用户本地 Chrom
 
 - relay 仅监听 `127.0.0.1`（localhost），不会暴露到外部网络
 - 每次启动自动生成随机 auth token，所有 API 请求必须携带
-- `/evaluate` 端点允许执行任意 JS，仅限本地可信调用方使用
-- 建议在隔离环境（虚拟机、容器）中运行
+- token 文件 (`/tmp/browser-relay-token`) 以 `0600` 权限写入，仅文件所有者可读
+- `/evaluate` 端点允许在浏览器上下文中执行 JS，可访问 DOM、cookies、localStorage 等。仅限本地可信调用方使用，不应暴露给不受信任的客户端
+- 建议在隔离环境（虚拟机、容器）中运行，使用专用浏览器 profile（不含敏感站点的登录态）
+- `start.sh` 仅通过 PID 文件精确停止 relay 进程，不会影响其他进程
 
 ## 文件位置
 
@@ -160,6 +162,7 @@ Telegram 配置：
 - Bot Token 和 Chat ID 从 memory 或 session_state 获取
 - Chat ID 可从 session 信息中提取（`telegram:alzmoltis_bot:<chat_id>`）
 - 发送前确保截图文件存在且非空
+- 安全提示：建议使用专用 Bot（权限最小化），不要复用管理其他敏感频道的 Bot Token
 
 ### 点击（坐标）
 ```bash

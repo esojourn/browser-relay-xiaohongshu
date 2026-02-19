@@ -7,19 +7,25 @@ RELAY_PID_FILE="/tmp/browser-relay.pid"
 TOKEN_FILE="/tmp/browser-relay-token"
 LOG_FILE="/tmp/relay.log"
 
-# 停止已有进程
+# 停止已有进程（仅通过 PID 文件精确停止）
 stop_relay() {
     if [ -f "$RELAY_PID_FILE" ]; then
         local pid=$(cat "$RELAY_PID_FILE")
         if kill -0 "$pid" 2>/dev/null; then
             kill "$pid" 2>/dev/null
-            sleep 1
+            # 等待进程退出，最多 5 秒
+            for i in $(seq 1 10); do
+                kill -0 "$pid" 2>/dev/null || break
+                sleep 0.5
+            done
+            # 如果仍未退出，发送 SIGKILL
+            if kill -0 "$pid" 2>/dev/null; then
+                kill -9 "$pid" 2>/dev/null
+            fi
             echo "已停止旧进程 (PID: $pid)"
         fi
         rm -f "$RELAY_PID_FILE"
     fi
-    # 兜底：杀掉所有 relay.py
-    pkill -f "python3.*relay.py" 2>/dev/null || true
 }
 
 # 检查 Chromium CDP 是否可用
