@@ -1,4 +1,14 @@
+<<<<<<< HEAD
 screenshots/
 *.pid
 .token
 __pycache__/
+=======
+relay.log
+screenshot.jpg
+screenshots/
+__pycache__/
+*.pyc
+.token
+node_modules/
+>>>>>>> d27e1894c4c81c4b347be4dac4f6a86d55709cd7
