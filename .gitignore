@@ -1,0 +1,7 @@
+relay.log
+screenshot.jpg
+screenshots/
+__pycache__/
+*.pyc
+.token
+node_modules/
