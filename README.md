@@ -38,7 +38,7 @@ chromium --remote-debugging-port=9222 --remote-allow-origins=*
 ```bash
 cd browser-relay
 python3 -m venv venv && source venv/bin/activate
-pip install websockets aiohttp
+pip install -r requirements.txt
 python3 relay.py
 ```
 
@@ -164,18 +164,25 @@ curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
 ## Requirements
 
 - Python 3.8+
-- `websockets`, `aiohttp` (pip install)
+- `aiohttp`, `websockets` — install via `pip install -r requirements.txt`
 - Chromium / Chrome with `--remote-debugging-port=9222 --remote-allow-origins=*`
+
+## Security
+
+- The relay listens only on `127.0.0.1` (localhost) and is never exposed to the network.
+- A random auth token is generated on each startup and saved to `/tmp/browser-relay-token`. All API requests require `Authorization: Bearer <token>`.
+- The `/evaluate` endpoint executes arbitrary JavaScript in the browser context. This is by design for automation, but should only be called by trusted local clients.
+- It is recommended to run the relay in an isolated environment (VM, container) when automating untrusted websites.
 
 ## File Structure
 
 ```
 browser-relay/
-├── relay.py       # Main relay server (asyncio + aiohttp + CDP WebSocket)
-├── start.sh       # Launcher script (start/stop/restart, CDP check)
-├── SKILL.md       # AI assistant skill definition
-├── venv/          # Python virtual environment
-└── screenshots/   # Auto-saved screenshots (gitignored)
+├── relay.py           # Main relay server (asyncio + aiohttp + CDP WebSocket)
+├── start.sh           # Launcher script (start/stop/restart, CDP check)
+├── requirements.txt   # Python dependencies
+├── SKILL.md           # AI assistant skill definition
+└── screenshots/       # Auto-saved screenshots (gitignored)
 ```
 
 ## Disclaimer
@@ -222,7 +229,7 @@ chromium --remote-debugging-port=9222 --remote-allow-origins=*
 ```bash
 cd browser-relay
 python3 -m venv venv && source venv/bin/activate
-pip install websockets aiohttp
+pip install -r requirements.txt
 python3 relay.py
 ```
 
@@ -255,8 +262,15 @@ bash start.sh stop     # 停止
 ## 依赖
 
 - Python 3.8+
-- `websockets`, `aiohttp`
+- `aiohttp`, `websockets` — 通过 `pip install -r requirements.txt` 安装
 - Chromium（需启用 `--remote-debugging-port=9222 --remote-allow-origins=*`）
+
+## 安全说明
+
+- relay 仅监听 `127.0.0.1`（localhost），不会暴露到外部网络
+- 每次启动自动生成随机 auth token，保存到 `/tmp/browser-relay-token`，所有 API 请求必须携带 `Authorization: Bearer <token>`
+- `/evaluate` 端点允许在浏览器中执行任意 JavaScript，这是自动化所需的设计，但仅应由本地可信调用方使用
+- 建议在隔离环境（虚拟机、容器）中运行
 
 ## 免责声明
 

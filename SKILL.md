@@ -20,14 +20,23 @@ AI → HTTP (port 18792) → relay.py → CDP (port 9222) → 用户本地 Chrom
 
 所有请求从用户本地 IP 发出，绕过反爬。
 
+## 安全说明
+
+- relay 仅监听 `127.0.0.1`（localhost），不会暴露到外部网络
+- 每次启动自动生成随机 auth token，所有 API 请求必须携带
+- `/evaluate` 端点允许执行任意 JS，仅限本地可信调用方使用
+- 建议在隔离环境（虚拟机、容器）中运行
+
 ## 文件位置
 
-- Relay 代码: `/home/spot/browser-relay/relay.py`
-- 启动脚本: `/home/spot/browser-relay/start.sh`
+> 以下路径均相对于项目安装目录，请根据实际位置调整。
+
+- Relay 代码: `./relay.py`
+- 启动脚本: `./start.sh`
 - Token 文件: `/tmp/browser-relay-token`
 - PID 文件: `/tmp/browser-relay.pid`
 - 日志: `/tmp/relay.log`
-- 截图目录: `/home/spot/browser-relay/screenshots/`
+- 截图目录: `./screenshots/`
 
 ## 启动流程
 
@@ -64,7 +73,7 @@ curl -s http://127.0.0.1:18792/health
 ### 4. 启动 relay
 
 ```bash
-bash /home/spot/browser-relay/start.sh
+bash start.sh
 ```
 
 ### 5. 获取并缓存 token
@@ -107,9 +116,9 @@ import sys, json, base64, os
 from datetime import datetime
 data = json.load(sys.stdin)
 if data.get('ok'):
-    os.makedirs('/home/spot/browser-relay/screenshots', exist_ok=True)
+    os.makedirs('./screenshots', exist_ok=True)
     fname = datetime.now().strftime('%Y%m%d_%H%M%S') + '.jpg'
-    path = f'/home/spot/browser-relay/screenshots/{fname}'
+    path = f'./screenshots/{fname}'
     with open(path, 'wb') as f:
         f.write(base64.b64decode(data['data']))
     print(f'saved:{path} size:{os.path.getsize(path)}')
@@ -212,7 +221,7 @@ curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
 ## 标准操作规范
 
 1. **截图确认制**：任何发布/提交操作前，必须先截图让用户确认
-2. **截图自动保存**：所有截图保存到 `/home/spot/browser-relay/screenshots/` 并带时间戳
+2. **截图自动保存**：所有截图保存到 `./screenshots/` 并带时间戳
 3. **Telegram 截图发送**：当用户在 TG 上交互时，截图通过 Telegram Bot API 发送，而不是仅保存到本地
 4. **Token 会话缓存**：token 只读一次，缓存在 session_state 中
 5. **错误重连**：如果请求失败（连接拒绝），自动尝试重启 relay
@@ -221,5 +230,5 @@ curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
 ## 停止 relay
 
 ```bash
-bash /home/spot/browser-relay/start.sh stop
+bash start.sh stop
 ```
