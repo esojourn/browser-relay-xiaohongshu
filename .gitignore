@@ -1,0 +1,4 @@
+screenshots/
+*.pid
+.token
+__pycache__/
