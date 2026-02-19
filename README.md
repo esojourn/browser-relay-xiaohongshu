@@ -11,92 +11,169 @@ AI assistants typically run on cloud servers. Chinese platforms aggressively blo
 ## Architecture
 
 ```
-AI Agent → HTTP (port 8787) → relay.py → CDP WebSocket (port 9222) → Local Chromium
+AI Agent → HTTP (port 18792) → relay.py → CDP WebSocket (port 9222) → Local Chromium
 ```
+
+## Features
+
+- **Full browser control**: navigate, click, type, scroll, screenshot, JS execution
+- **Tab management**: create, switch, close tabs
+- **DOM queries**: find elements by CSS selector, get coordinates
+- **Screenshot to Telegram**: capture screenshots and send directly to Telegram via Bot API
+- **Auth token**: auto-generated per session for security
+- **Chromium auto-launch**: supports launching Chromium with correct flags
 
 ## Quick Start
 
-1. Launch Chromium with remote debugging:
+### 1. Launch Chromium with remote debugging
+
 ```bash
-chromium --remote-debugging-port=9222
+chromium --remote-debugging-port=9222 --remote-allow-origins=*
 ```
 
-2. Install dependencies and start relay:
+> **Important**: `--remote-allow-origins=*` is required, otherwise WebSocket connections will be rejected.
+
+### 2. Install dependencies and start relay
+
 ```bash
 cd browser-relay
 python3 -m venv venv && source venv/bin/activate
-pip install websockets
+pip install websockets aiohttp
 python3 relay.py
 ```
 
 Or use the launcher script:
+
 ```bash
 bash start.sh          # start
 bash start.sh restart  # restart
 bash start.sh stop     # stop
 ```
 
-3. Use the API:
-```bash
-# Status check
-curl http://localhost:8787/status
+### 3. Use the API
 
-# List browser targets
-curl http://localhost:8787/targets
+All endpoints require `Authorization: Bearer <token>` header. The token is auto-generated at startup and saved to `/tmp/browser-relay-token`.
+
+```bash
+TOKEN=$(cat /tmp/browser-relay-token)
+
+# Health check
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:18792/health
+
+# List browser tabs
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:18792/tabs
 
 # Navigate
-curl -X POST -H "Content-Type: application/json" \
-  -d '{"url":"https://www.xiaohongshu.com"}' http://localhost:8787/navigate
+curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"url":"https://www.xiaohongshu.com"}' http://localhost:18792/navigate
 
 # Screenshot
-curl -X POST http://localhost:8787/screenshot
+curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"quality":80}' http://localhost:18792/screenshot
 
 # Click at coordinates
-curl -X POST -H "Content-Type: application/json" \
-  -d '{"x":400,"y":300}' http://localhost:8787/click
+curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"x":400,"y":300}' http://localhost:18792/click
+
+# Click by CSS selector
+curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"selector":"button.submit"}' http://localhost:18792/click
 
 # Type text
-curl -X POST -H "Content-Type: application/json" \
-  -d '{"text":"hello"}' http://localhost:8787/type
+curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"text":"hello"}' http://localhost:18792/type
+
+# Send key
+curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"key":"Enter"}' http://localhost:18792/keypress
 
 # Execute JavaScript
-curl -X POST -H "Content-Type: application/json" \
-  -d '{"expression":"document.title"}' http://localhost:8787/eval
+curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"expression":"document.title"}' http://localhost:18792/evaluate
 
 # Scroll
-curl -X POST -H "Content-Type: application/json" \
-  -d '{"x":400,"y":300,"deltaY":500}' http://localhost:8787/scroll
+curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"y":300}' http://localhost:18792/scroll
+
+# Wait for element
+curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"selector":".target","timeout":5000}' http://localhost:18792/wait
+```
+
+### Screenshot to Telegram
+
+When interacting via Telegram, screenshots can be sent directly to the chat:
+
+```bash
+TOKEN=$(cat /tmp/browser-relay-token)
+
+# 1. Capture screenshot
+curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"quality":80}' http://localhost:18792/screenshot \
+  | python3 -c "
+import sys, json, base64
+data = json.load(sys.stdin)
+if data.get('ok'):
+    with open('/tmp/relay_screenshot.png', 'wb') as f:
+        f.write(base64.b64decode(data['data']))
+    print('ok')
+"
+
+# 2. Send to Telegram
+TG_BOT_TOKEN="your-bot-token"
+TG_CHAT_ID="your-chat-id"
+curl -s -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendPhoto" \
+  -F "chat_id=${TG_CHAT_ID}" \
+  -F "photo=@/tmp/relay_screenshot.png"
+```
+
+### Tab Management
+
+```bash
+# New tab
+curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com"}' http://localhost:18792/tab/new
+
+# Switch tab
+curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"tab_id":"xxx"}' http://localhost:18792/tab/activate
+
+# Close tab
+curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"tab_id":"xxx"}' http://localhost:18792/tab/close
 ```
 
 ## API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/status` | GET/POST | Health check, connection status |
-| `/targets` | GET/POST | List all browser targets/tabs |
-| `/connect` | POST | Connect to a specific target by `wsUrl` |
+| `/health` | GET | Health check |
+| `/tabs` | GET | List all browser tabs |
 | `/navigate` | POST | Navigate to URL (`{"url":"..."}`) |
-| `/screenshot` | POST | Capture screenshot (jpeg/png, optional `fullPage`) |
-| `/click` | POST | Click at coordinates (`{"x":N,"y":N}`) |
+| `/screenshot` | POST | Capture screenshot (jpeg/png, optional `quality`, `fullPage`) |
+| `/click` | POST | Click at coordinates (`{"x":N,"y":N}`) or selector (`{"selector":"..."}`) |
 | `/type` | POST | Type text (`{"text":"..."}`) |
-| `/key` | POST | Send key event (`{"key":"Enter"}`) |
-| `/scroll` | POST | Scroll page (`{"deltaX":N,"deltaY":N}`) |
-| `/eval` | POST | Execute JavaScript (`{"expression":"..."}`) |
-| `/dom` | POST | Query DOM element (`{"selector":"..."}`) → returns center coordinates |
-| `/html` | POST | Get element outer HTML (`{"selector":"..."}`) |
+| `/keypress` | POST | Send key event (`{"key":"Enter"}`) |
+| `/scroll` | POST | Scroll page (`{"y":N}`) |
+| `/evaluate` | POST | Execute JavaScript (`{"expression":"..."}`) |
+| `/wait` | POST | Wait for element (`{"selector":"...","timeout":5000}`) |
+| `/tab/new` | POST | Open new tab (`{"url":"..."}`) |
+| `/tab/activate` | POST | Switch to tab (`{"tab_id":"..."}`) |
+| `/tab/close` | POST | Close tab (`{"tab_id":"..."}`) |
 
 ## Requirements
 
 - Python 3.8+
-- `websockets` (pip install websockets)
-- Chromium / Chrome with `--remote-debugging-port=9222`
+- `websockets`, `aiohttp` (pip install)
+- Chromium / Chrome with `--remote-debugging-port=9222 --remote-allow-origins=*`
 
 ## File Structure
 
 ```
 browser-relay/
-├── relay.py       # Main relay server (asyncio + raw HTTP + CDP WebSocket)
+├── relay.py       # Main relay server (asyncio + aiohttp + CDP WebSocket)
 ├── start.sh       # Launcher script (start/stop/restart, CDP check)
+├── SKILL.md       # AI assistant skill definition
 ├── venv/          # Python virtual environment
 └── screenshots/   # Auto-saved screenshots (gitignored)
 ```
@@ -118,25 +195,39 @@ AI 助手通常运行在云服务器上，其 IP 会被小红书等平台的风�
 ## 架构
 
 ```
-AI 助手 → HTTP (端口 8787) → relay.py → CDP WebSocket (端口 9222) → 本地 Chromium
+AI 助手 → HTTP (端口 18792) → relay.py → CDP WebSocket (端口 9222) → 本地 Chromium
 ```
+
+## 功能特性
+
+- **完整浏览器控制**：导航、点击、输入、滚动、截图、JS 执行
+- **标签页管理**：新建、切换、关闭标签页
+- **DOM 查询**：通过 CSS 选择器查找元素坐标
+- **截图发送到 Telegram**：截图后直接通过 Bot API 发送到 Telegram 聊天
+- **认证 Token**：每次启动自动生成，保障安全
+- **Chromium 自动启动**：支持正确参数启动 Chromium
 
 ## 快速开始
 
-1. 启动 Chromium（带远程调试端口）：
+### 1. 启动 Chromium（带远程调试端口）
+
 ```bash
-chromium --remote-debugging-port=9222
+chromium --remote-debugging-port=9222 --remote-allow-origins=*
 ```
 
-2. 安装依赖并启动：
+> **重要**：必须加 `--remote-allow-origins=*`，否则 WebSocket 连接会被拒绝。
+
+### 2. 安装依赖并启动
+
 ```bash
 cd browser-relay
 python3 -m venv venv && source venv/bin/activate
-pip install websockets
+pip install websockets aiohttp
 python3 relay.py
 ```
 
 或使用启动脚本：
+
 ```bash
 bash start.sh          # 启动
 bash start.sh restart  # 重启
@@ -147,23 +238,25 @@ bash start.sh stop     # 停止
 
 | 端点 | 说明 |
 |------|------|
-| `/status` | 健康检查 |
-| `/targets` | 获取所有标签页 |
+| `/health` | 健康检查 |
+| `/tabs` | 获取所有标签页 |
 | `/navigate` | 导航到 URL |
-| `/screenshot` | 截图 |
-| `/click` | 点击坐标 |
+| `/screenshot` | 截图（支持质量参数和全页截图） |
+| `/click` | 点击坐标或 CSS 选择器 |
 | `/type` | 输入文本 |
-| `/key` | 发送按键 |
+| `/keypress` | 发送按键 |
 | `/scroll` | 滚动页面 |
-| `/eval` | 执行 JavaScript |
-| `/dom` | 查询 DOM 元素坐标 |
-| `/html` | 获取元素 HTML |
+| `/evaluate` | 执行 JavaScript |
+| `/wait` | 等待元素出现 |
+| `/tab/new` | 新建标签页 |
+| `/tab/activate` | 切换标签页 |
+| `/tab/close` | 关闭标签页 |
 
 ## 依赖
 
 - Python 3.8+
-- `websockets`
-- Chromium（需启用 `--remote-debugging-port=9222`）
+- `websockets`, `aiohttp`
+- Chromium（需启用 `--remote-debugging-port=9222 --remote-allow-origins=*`）
 
 ## 免责声明
 
