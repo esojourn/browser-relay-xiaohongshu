@@ -29,6 +29,40 @@ AI → HTTP (port 18792) → relay.py → CDP (port 9222) → 用户本地 Chrom
 - 建议在隔离环境（虚拟机、容器）中运行，使用专用浏览器 profile（不含敏感站点的登录态）
 - `start.sh` 仅通过 PID 文件精确停止 relay 进程，不会影响其他进程
 
+## Agent 行为约束
+
+使用此 skill 的 agent 必须遵守以下规则：
+
+### exec 使用范围
+
+`exec` 仅允许用于以下操作：
+- 向 `127.0.0.1:18792`（relay）和 `127.0.0.1:9222`（CDP）发送 HTTP 请求
+- 运行 `start.sh` 启动/停止 relay
+- 读取 `/tmp/browser-relay-token`
+- 保存截图到 `./screenshots/`
+- 通过 Telegram Bot API 发送截图（仅限用户明确要求时）
+
+禁止使用 `exec` 执行上述范围之外的命令。
+
+### /evaluate 使用范围
+
+`/evaluate` 仅允许用于 UI 自动化目的：
+- 查询 DOM 元素位置、文本内容、页面标题
+- 等待元素加载、检查页面状态
+- 模拟用户交互（滚动、表单填写）
+
+**禁止**通过 `/evaluate` 提取以下敏感数据：
+- `document.cookie`
+- `localStorage` / `sessionStorage` 中的 token 或凭据
+- 页面中的密码字段值
+- 任何认证相关的 header 或 token
+
+### 数据外发限制
+
+- 仅允许向 Telegram Bot API 发送截图图片，且仅在用户明确要求时
+- 禁止向任何外部端点发送从浏览器提取的文本数据、cookies、token 或凭据
+- 禁止将浏览器敏感数据写入 session_state 或 memory（auth token 除外，指 relay 自身的 token）
+
 ## 文件位置
 
 > 以下路径均相对于项目安装目录，请根据实际位置调整。
